@@ -1,0 +1,11 @@
+# Robots.txt for AlimsWrite
+
+User-agent: *
+Allow: /
+
+# Disallow admin area
+Disallow: /admin/
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://alimswrite.com/sitemap.xml

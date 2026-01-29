@@ -1,27 +1,247 @@
+/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap');
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans text-dark-800 bg-white antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-semibold;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center px-6 py-3 font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-900 text-white hover:bg-primary-800 focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-secondary-500 text-white hover:bg-secondary-600 focus:ring-secondary-400;
+  }
+
+  .btn-outline {
+    @apply btn border-2 border-primary-900 text-primary-900 hover:bg-primary-900 hover:text-white focus:ring-primary-500;
+  }
+
+  .btn-white {
+    @apply btn bg-white text-primary-900 hover:bg-gray-100 focus:ring-white;
+  }
+
+  .btn-ghost {
+    @apply btn text-dark-600 hover:bg-dark-100 focus:ring-dark-300;
+  }
+
+  .btn-sm {
+    @apply px-4 py-2 text-sm;
+  }
+
+  .btn-lg {
+    @apply px-8 py-4 text-lg;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200;
+  }
+
+  .card-bordered {
+    @apply card border border-dark-200;
+  }
+
+  /* Inputs */
+  .input {
+    @apply w-full px-4 py-3 border border-dark-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:ring-red-500;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-dark-700 mb-1;
+  }
+
+  /* Links */
+  .link {
+    @apply text-primary-600 hover:text-primary-800 underline-offset-4 hover:underline transition-colors;
+  }
+
+  /* Container */
+  .container-custom {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Section */
+  .section {
+    @apply py-16 md:py-24;
+  }
+
+  /* Headings */
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-dark-900 mb-4;
+  }
+
+  .section-subtitle {
+    @apply text-lg text-dark-500 max-w-2xl;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  /* WhatsApp Button */
+  .whatsapp-btn {
+    @apply inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-full font-medium hover:bg-green-600 transition-colors shadow-lg hover:shadow-xl;
+  }
+
+  /* Chat Widget */
+  .chat-widget {
+    @apply fixed bottom-6 right-6 z-50;
+  }
+
+  /* Gradient backgrounds */
+  .gradient-primary {
+    @apply bg-gradient-to-r from-primary-900 to-primary-700;
+  }
+
+  .gradient-hero {
+    @apply bg-gradient-to-br from-primary-900 via-primary-800 to-primary-900;
+  }
+
+  /* Gold accents */
+  .gold-accent {
+    @apply text-secondary-500;
+  }
+
+  .gold-underline {
+    @apply relative after:absolute after:bottom-0 after:left-0 after:w-full after:h-1 after:bg-secondary-500;
+  }
+
+  /* Topic Card */
+  .topic-card {
+    @apply card p-6 hover:border-primary-500 border-2 border-transparent cursor-pointer;
+  }
+
+  /* Service Card */
+  .service-card {
+    @apply card p-8 text-center hover:border-secondary-500 border-2 border-transparent;
+  }
+
+  /* Admin Sidebar */
+  .admin-sidebar {
+    @apply fixed left-0 top-0 h-full w-64 bg-dark-900 text-white;
+  }
+
+  .admin-nav-item {
+    @apply flex items-center gap-3 px-4 py-3 text-dark-300 hover:bg-dark-800 hover:text-white rounded-lg transition-colors;
+  }
+
+  .admin-nav-item.active {
+    @apply bg-primary-900 text-white;
+  }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-secondary-500;
+  }
+
+  /* Animate on scroll placeholder */
+  .animate-on-scroll {
+    @apply opacity-0 translate-y-4 transition-all duration-500;
+  }
+
+  .animate-on-scroll.visible {
+    @apply opacity-100 translate-y-0;
+  }
+}
+
+/* Rich Text Editor Styles */
+.prose {
+  @apply max-w-none;
+}
+
+.prose h1 {
+  @apply text-3xl font-bold mt-8 mb-4;
+}
+
+.prose h2 {
+  @apply text-2xl font-bold mt-6 mb-3;
+}
+
+.prose h3 {
+  @apply text-xl font-semibold mt-4 mb-2;
+}
+
+.prose p {
+  @apply my-4 leading-relaxed;
+}
+
+.prose ul {
+  @apply list-disc pl-6 my-4;
+}
+
+.prose ol {
+  @apply list-decimal pl-6 my-4;
+}
+
+.prose li {
+  @apply my-2;
+}
+
+.prose a {
+  @apply text-primary-600 hover:underline;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-primary-500 pl-4 italic my-4;
+}
+
+.prose code {
+  @apply bg-dark-100 px-2 py-1 rounded text-sm;
+}
+
+.prose pre {
+  @apply bg-dark-800 text-white p-4 rounded-lg overflow-x-auto my-4;
+}
+
+/* Loading Spinner */
+.spinner {
+  @apply animate-spin rounded-full border-4 border-dark-200 border-t-primary-600;
+}
+
+/* Toast notifications */
+.toast-success {
+  @apply bg-green-500 text-white;
+}
+
+.toast-error {
+  @apply bg-red-500 text-white;
 }
