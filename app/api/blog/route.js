@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import slugify from 'slugify'
 import { sanitizeHtml, sanitizeText } from '@/lib/sanitize'
 
-// Get blog posts
+// GET blog posts
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -63,16 +63,19 @@ export async function GET(request) {
   } catch (error) {
     console.error('Get blog posts error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch blog posts', posts: [], total: 0 },
+      { error: 'Failed to fetch blog posts', details: error.message, posts: [], total: 0 },
       { status: 500 }
     )
   }
 }
 
-// Create blog post
+// POST - Create blog post
 export async function POST(request) {
+  console.log('📝 Blog POST request received')
+  
   try {
     const body = await request.json()
+    console.log('📝 Blog data:', Object.keys(body))
 
     const {
       title,
@@ -90,9 +93,42 @@ export async function POST(request) {
     } = body
 
     // Validate required fields
-    if (!title?.trim() || !excerpt?.trim() || !content?.trim() || !categoryId) {
+    if (!title?.trim()) {
       return NextResponse.json(
-        { error: 'Title, excerpt, content, and category are required' },
+        { error: 'Title is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!excerpt?.trim()) {
+      return NextResponse.json(
+        { error: 'Excerpt is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!content?.trim()) {
+      return NextResponse.json(
+        { error: 'Content is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!categoryId) {
+      return NextResponse.json(
+        { error: 'Category is required' },
+        { status: 400 }
+      )
+    }
+
+    // Check if category exists
+    const category = await prisma.blogCategory.findUnique({
+      where: { id: categoryId }
+    })
+
+    if (!category) {
+      return NextResponse.json(
+        { error: 'Category not found' },
         { status: 400 }
       )
     }
@@ -107,22 +143,9 @@ export async function POST(request) {
     let slug = baseSlug
     let counter = 1
 
-    // Keep checking until we find a unique slug
     while (await prisma.blogPost.findUnique({ where: { slug } })) {
       slug = `${baseSlug}-${counter}`
       counter++
-    }
-
-    // Verify category exists
-    const category = await prisma.blogCategory.findUnique({
-      where: { id: categoryId }
-    })
-
-    if (!category) {
-      return NextResponse.json(
-        { error: 'Category not found' },
-        { status: 400 }
-      )
     }
 
     const post = await prisma.blogPost.create({
@@ -132,11 +155,11 @@ export async function POST(request) {
         excerpt: cleanExcerpt,
         content: cleanContent,
         categoryId,
-        tags: Array.isArray(tags) ? tags.map(t => sanitizeText(t)) : [],
-        keywords: Array.isArray(keywords) ? keywords.map(k => sanitizeText(k)) : [],
+        tags: Array.isArray(tags) ? tags.filter(t => t).map(t => sanitizeText(t)) : [],
+        keywords: Array.isArray(keywords) ? keywords.filter(k => k).map(k => sanitizeText(k)) : [],
         featuredImage: featuredImage || null,
-        metaTitle: sanitizeText(metaTitle) || cleanTitle,
-        metaDescription: sanitizeText(metaDescription) || cleanExcerpt.substring(0, 160),
+        metaTitle: metaTitle ? sanitizeText(metaTitle) : cleanTitle,
+        metaDescription: metaDescription ? sanitizeText(metaDescription) : cleanExcerpt.substring(0, 160),
         status: status || 'draft',
         isFeatured: Boolean(isFeatured),
         allowComments: allowComments !== false,
@@ -147,15 +170,17 @@ export async function POST(request) {
       },
     })
 
+    console.log('✅ Blog post created:', post.id)
+
     return NextResponse.json({
       success: true,
       message: 'Blog post created successfully',
       post,
     })
   } catch (error) {
-    console.error('Create blog post error:', error)
+    console.error('❌ Create blog post error:', error)
     return NextResponse.json(
-      { error: 'Failed to create blog post: ' + error.message },
+      { error: 'Failed to create blog post', details: error.message },
       { status: 500 }
     )
   }

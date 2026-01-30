@@ -1,4 +1,4 @@
-// next.config.js - FIXED VERSION WITH CSP
+// next.config.js
 const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
@@ -40,13 +40,13 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com https://*.cloudflare.com https://*.vercel-insights.com https://vercel.live",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https: http:",
               "font-src 'self' https://fonts.gstatic.com data:",
-              "connect-src 'self' https://*.supabase.co https://www.google-analytics.com https://vitals.vercel-insights.com wss: ws:",
+              "connect-src 'self' https://*.supabase.co https://www.google-analytics.com https://vitals.vercel-insights.com https://*.cloudflare.com https://*.vercel.app wss: ws:",
               "media-src 'self' blob: https://*.supabase.co",
-              "frame-src 'self' https://www.youtube.com https://www.google.com",
+              "frame-src 'self' https://www.youtube.com https://www.google.com https://vercel.live",
               "frame-ancestors 'self'",
               "form-action 'self'",
               "base-uri 'self'",
