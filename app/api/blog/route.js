@@ -2,20 +2,20 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import slugify from 'slugify'
+import { sanitizeHtml, sanitizeText } from '@/lib/sanitize'
 
 // Get blog posts
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20')))
     const status = searchParams.get('status')
     const categoryId = searchParams.get('categoryId')
     const featured = searchParams.get('featured')
 
     const skip = (page - 1) * limit
 
-    // Build where clause
     const where = {}
 
     if (status) {
@@ -63,7 +63,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Get blog posts error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch blog posts' },
+      { error: 'Failed to fetch blog posts', posts: [], total: 0 },
       { status: 500 }
     )
   }
@@ -89,36 +89,56 @@ export async function POST(request) {
       allowComments,
     } = body
 
-    if (!title || !excerpt || !content || !categoryId) {
+    // Validate required fields
+    if (!title?.trim() || !excerpt?.trim() || !content?.trim() || !categoryId) {
       return NextResponse.json(
         { error: 'Title, excerpt, content, and category are required' },
         { status: 400 }
       )
     }
 
-    // Generate slug
-    let slug = slugify(title, { lower: true, strict: true })
+    // Sanitize inputs
+    const cleanTitle = sanitizeText(title)
+    const cleanExcerpt = sanitizeText(excerpt)
+    const cleanContent = sanitizeHtml(content)
 
-    // Check if slug exists
-    const existing = await prisma.blogPost.findUnique({ where: { slug } })
-    if (existing) {
-      slug = `${slug}-${Date.now()}`
+    // Generate unique slug
+    let baseSlug = slugify(cleanTitle, { lower: true, strict: true })
+    let slug = baseSlug
+    let counter = 1
+
+    // Keep checking until we find a unique slug
+    while (await prisma.blogPost.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${counter}`
+      counter++
+    }
+
+    // Verify category exists
+    const category = await prisma.blogCategory.findUnique({
+      where: { id: categoryId }
+    })
+
+    if (!category) {
+      return NextResponse.json(
+        { error: 'Category not found' },
+        { status: 400 }
+      )
     }
 
     const post = await prisma.blogPost.create({
       data: {
-        title,
+        title: cleanTitle,
         slug,
-        excerpt,
-        content,
+        excerpt: cleanExcerpt,
+        content: cleanContent,
         categoryId,
-        tags: tags || [],
-        keywords: keywords || [],
+        tags: Array.isArray(tags) ? tags.map(t => sanitizeText(t)) : [],
+        keywords: Array.isArray(keywords) ? keywords.map(k => sanitizeText(k)) : [],
         featuredImage: featuredImage || null,
-        metaTitle: metaTitle || title,
-        metaDescription: metaDescription || excerpt.substring(0, 160),
+        metaTitle: sanitizeText(metaTitle) || cleanTitle,
+        metaDescription: sanitizeText(metaDescription) || cleanExcerpt.substring(0, 160),
         status: status || 'draft',
-        isFeatured: isFeatured || false,
+        isFeatured: Boolean(isFeatured),
         allowComments: allowComments !== false,
         publishedAt: status === 'published' ? new Date() : null,
       },

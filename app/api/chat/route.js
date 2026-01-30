@@ -22,13 +22,14 @@ export async function GET(request) {
         },
       },
       orderBy: { updatedAt: 'desc' },
+      take: 50, // Limit sessions to prevent memory issues
     })
 
     return NextResponse.json({ sessions })
   } catch (error) {
     console.error('Get chat sessions error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch chat sessions' },
+      { error: 'Failed to fetch chat sessions', sessions: [] },
       { status: 500 }
     )
   }
@@ -50,8 +51,16 @@ export async function POST(request) {
       fileUrl,
       fileName,
       fileDuration,
-      tempId, // Add tempId to track client-side messages
+      tempId,
     } = body
+
+    // Validate input
+    if (!message && !fileUrl && !sessionId) {
+      return NextResponse.json(
+        { error: 'Message or file is required' },
+        { status: 400 }
+      )
+    }
 
     let session
     let createdMessage = null
@@ -68,6 +77,7 @@ export async function POST(request) {
         )
       }
     } else {
+      // Create new session
       session = await prisma.chatSession.create({
         data: {
           visitorId: visitorId || `visitor_${Date.now()}`,
@@ -78,14 +88,15 @@ export async function POST(request) {
         },
       })
 
-      await prisma.notification.create({
+      // Create notification (non-blocking)
+      prisma.notification.create({
         data: {
           type: 'chat',
           title: 'New Chat Started',
           message: visitorName ? `${visitorName} started a chat` : 'New visitor started a chat',
           link: '/admin/chat',
         },
-      }).catch(() => {}) // Don't fail if notification fails
+      }).catch((err) => console.error('Notification error:', err))
     }
 
     // Add message if provided
@@ -102,22 +113,22 @@ export async function POST(request) {
         },
       })
 
-      // Update session timestamp
-      await prisma.chatSession.update({
+      // Update session timestamp (non-blocking)
+      prisma.chatSession.update({
         where: { id: session.id },
         data: { updatedAt: new Date() },
-      })
+      }).catch((err) => console.error('Session update error:', err))
 
-      // Create notification for admin when visitor sends message
+      // Create notification for admin when visitor sends message (non-blocking)
       if (sender === 'visitor') {
-        await prisma.notification.create({
+        prisma.notification.create({
           data: {
             type: 'chat',
             title: 'New Chat Message',
             message: message ? message.substring(0, 100) : 'New file received',
             link: '/admin/chat',
           },
-        }).catch(() => {})
+        }).catch((err) => console.error('Notification error:', err))
       }
     }
 
@@ -128,8 +139,8 @@ export async function POST(request) {
         visitorId: session.visitorId,
         status: session.status,
       },
-      message: createdMessage, // Return the created message with its ID
-      tempId, // Return tempId for client-side matching
+      message: createdMessage,
+      tempId,
     })
   } catch (error) {
     console.error('Chat error:', error)

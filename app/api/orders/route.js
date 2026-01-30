@@ -75,11 +75,13 @@ export async function POST(request) {
 
     const body = await request.json()
 
+    // ✅ FIX: Accept both field name formats
+    const customerName = body.customerName || body.name || body.fullName
+    const customerEmail = body.customerEmail || body.email
+    const customerPhone = body.customerPhone || body.phone || body.phoneNumber
+    const customerWhatsapp = body.customerWhatsapp || body.whatsapp || body.whatsappNumber || customerPhone
+
     const {
-      customerName,
-      customerEmail,
-      customerPhone,
-      customerWhatsapp,
       serviceId,
       departmentId,
       projectTitle,
@@ -97,9 +99,26 @@ export async function POST(request) {
       quotedPrice,
     } = body
 
-    if (!customerName || !customerPhone) {
+    // ✅ Better validation with specific error messages
+    if (!customerName?.trim()) {
       return NextResponse.json(
-        { error: 'Customer name and phone are required' },
+        { error: 'Customer name is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!customerPhone?.trim()) {
+      return NextResponse.json(
+        { error: 'Phone number is required' },
+        { status: 400 }
+      )
+    }
+
+    // ✅ Validate phone format (Nigerian numbers)
+    const cleanPhone = customerPhone.replace(/\D/g, '')
+    if (cleanPhone.length < 10 || cleanPhone.length > 14) {
+      return NextResponse.json(
+        { error: 'Please enter a valid phone number' },
         { status: 400 }
       )
     }
@@ -107,8 +126,8 @@ export async function POST(request) {
     const orderNumber = generateOrderNumber()
 
     const finalEmail = customerEmail && customerEmail.trim() !== '' 
-      ? customerEmail 
-      : `manual-${orderNumber.toLowerCase()}@internal.alimswrite.com`
+      ? customerEmail.toLowerCase().trim()
+      : `order-${orderNumber.toLowerCase()}@alimswrite.com`
 
     const order = await prisma.order.create({
       data: {
@@ -120,12 +139,12 @@ export async function POST(request) {
         serviceId: serviceId || null,
         departmentId: departmentId || null,
         projectTitle: projectTitle ? sanitizeText(projectTitle) : null,
-        projectType: sanitizeText(projectType || 'Other'),
+        projectType: sanitizeText(projectType || 'Project'),
         level: level ? sanitizeText(level) : null,
         numberOfPages: numberOfPages ? parseInt(numberOfPages) : null,
         numberOfChapters: numberOfChapters ? parseInt(numberOfChapters) : null,
         deadline: deadline ? new Date(deadline) : null,
-        description: description ? sanitizeText(description) : '',
+        description: description ? sanitizeText(description) : 'No description provided',
         attachments: attachments || [],
         status: status || 'pending',
         priority: priority || 'normal',
@@ -139,24 +158,28 @@ export async function POST(request) {
       },
     })
 
-    await prisma.notification.create({
+    // Create notification (non-blocking)
+    prisma.notification.create({
       data: {
         type: 'order',
         title: 'New Order Received',
-        message: `${sanitizeText(customerName)} placed an order`,
+        message: `${sanitizeText(customerName)} placed an order for ${projectType || 'a project'}`,
         link: `/admin/orders/${order.id}`,
       },
-    }).catch(() => {})
+    }).catch((err) => console.error('Notification error:', err))
 
     return NextResponse.json({
       success: true,
-      message: 'Order created successfully',
-      order,
+      message: 'Order submitted successfully! We will contact you shortly.',
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+      },
     })
   } catch (error) {
     console.error('Create order error:', error)
     return NextResponse.json(
-      { error: 'Failed to create order' },
+      { error: 'Failed to create order. Please try again or contact us directly.' },
       { status: 500 }
     )
   }

@@ -1,9 +1,13 @@
 // app/api/upload/route.js
 import { NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'fs/promises'
-import path from 'path'
-import { existsSync } from 'fs'
+import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
 // Allowed MIME types
 const ALLOWED_MIME_TYPES = {
@@ -68,32 +72,37 @@ export async function POST(request) {
       )
     }
 
-    // Create upload directory
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', type)
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true })
-    }
-
     // Generate random filename
     const randomName = crypto.randomBytes(16).toString('hex')
-    const fileName = `${randomName}${safeExtension}`
-    const filePath = path.join(uploadDir, fileName)
+    const fileName = `${type}/${randomName}${safeExtension}`
 
-    // Verify path is in upload directory
-    if (!filePath.startsWith(uploadDir)) {
+    // Convert file to buffer
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
+
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('uploads')
+      .upload(fileName, buffer, {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (error) {
+      console.error('Supabase upload error:', error)
       return NextResponse.json(
-        { error: 'Invalid file path' },
-        { status: 400 }
+        { error: 'Failed to upload file to storage' },
+        { status: 500 }
       )
     }
 
-    // Write file
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    await writeFile(filePath, buffer)
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('uploads')
+      .getPublicUrl(fileName)
 
-    // Return public URL
-    const fileUrl = `/uploads/${type}/${fileName}`
+    const fileUrl = urlData.publicUrl
 
     return NextResponse.json({
       success: true,
@@ -110,10 +119,3 @@ export async function POST(request) {
     )
   }
 }
-
-// ❌ REMOVED - This was causing the error:
-// export const config = {
-//   api: {
-//     bodyParser: false,
-//   },
-// }
