@@ -20,19 +20,16 @@ import { useSettings } from '@/lib/SettingsContext'
 export default function ChatWidget() {
   const { settings } = useSettings()
   
-  // Use a single messages state with a Map for deduplication
   const [messagesMap, setMessagesMap] = useState(new Map())
   const [inputMessage, setInputMessage] = useState('')
   const [sessionId, setSessionId] = useState(null)
   const [isOpen, setIsOpen] = useState(false)
   
-  // Loading states
   const [isSending, setIsSending] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   
-  // UI state
   const [showWhatsApp, setShowWhatsApp] = useState(false)
   const [visitorInfo, setVisitorInfo] = useState({ name: '', phone: '' })
   const [showInfoForm, setShowInfoForm] = useState(false)
@@ -40,7 +37,6 @@ export default function ChatWidget() {
   const [playingVoiceId, setPlayingVoiceId] = useState(null)
   const [error, setError] = useState(null)
   
-  // Refs
   const messagesEndRef = useRef(null)
   const pollingRef = useRef(null)
   const timeoutRef = useRef(null)
@@ -53,7 +49,6 @@ export default function ChatWidget() {
   const initializedRef = useRef(false)
   const lastPollTimeRef = useRef(null)
 
-  // Convert Map to sorted array for rendering
   const messages = Array.from(messagesMap.values()).sort(
     (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
   )
@@ -83,7 +78,6 @@ export default function ChatWidget() {
     try {
       const res = await fetch(`/api/chat/${sid}`)
       if (!res.ok) {
-        // Session expired or doesn't exist
         localStorage.removeItem('chatSessionId')
         setSessionId(null)
         return
@@ -91,7 +85,6 @@ export default function ChatWidget() {
       
       const data = await res.json()
       if (data.messages && data.messages.length > 0) {
-        // Create new Map from messages
         const newMap = new Map()
         data.messages.forEach(msg => {
           newMap.set(msg.id, msg)
@@ -148,7 +141,6 @@ export default function ChatWidget() {
           let hasNewAdminMsg = false
           
           data.messages.forEach(msg => {
-            // Only add if not exists OR if it's replacing a temp message
             if (!newMap.has(msg.id)) {
               newMap.set(msg.id, msg)
               if (msg.sender === 'admin') {
@@ -173,10 +165,7 @@ export default function ChatWidget() {
       }
     }
 
-    // Initial poll
     poll()
-    
-    // Set interval
     pollingRef.current = setInterval(poll, 3000)
 
     return stopPolling
@@ -247,7 +236,6 @@ export default function ChatWidget() {
     setError(null)
     setInputMessage('')
 
-    // Create temp message with unique ID
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`
     const tempMsg = {
       id: tempId,
@@ -261,7 +249,6 @@ export default function ChatWidget() {
       pending: true,
     }
     
-    // Add temp message to Map
     setMessagesMap(prev => new Map(prev).set(tempId, tempMsg))
     startWhatsAppTimeout()
 
@@ -284,21 +271,18 @@ export default function ChatWidget() {
       const data = await res.json()
 
       if (data.success && data.session) {
-        // Save session ID
         if (!sessionId) {
           setSessionId(data.session.id)
           localStorage.setItem('chatSessionId', data.session.id)
         }
 
-        // Replace temp message with real one
         setMessagesMap(prev => {
           const newMap = new Map(prev)
-          newMap.delete(tempId) // Remove temp
+          newMap.delete(tempId)
           
           if (data.message) {
             newMap.set(data.message.id, { ...data.message, pending: false })
           } else {
-            // If no message returned, just update the temp one
             newMap.set(tempId, { ...tempMsg, pending: false })
           }
           
@@ -311,7 +295,6 @@ export default function ChatWidget() {
       console.error('Send error:', err)
       setError('Failed to send message')
       
-      // Mark as failed
       setMessagesMap(prev => {
         const newMap = new Map(prev)
         const msg = newMap.get(tempId)
@@ -450,7 +433,6 @@ export default function ChatWidget() {
   // ==================== VOICE PLAYBACK ====================
   
   const playVoiceMessage = (url, msgId) => {
-    // If clicking the same voice that's playing, pause it
     if (playingVoiceId === msgId) {
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause()
@@ -460,13 +442,11 @@ export default function ChatWidget() {
       return
     }
     
-    // Stop any currently playing audio
     if (audioPlayerRef.current) {
       audioPlayerRef.current.pause()
       audioPlayerRef.current.currentTime = 0
     }
     
-    // Create new audio and play
     audioPlayerRef.current = new Audio(url)
     audioPlayerRef.current.onended = () => {
       setPlayingVoiceId(null)
@@ -563,29 +543,29 @@ export default function ChatWidget() {
       
       case 'voice':
         return (
-          <div className="flex items-center gap-2 min-w-[140px]">
+          <div className="flex items-center gap-2 min-w-[120px]">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 playVoiceMessage(msg.fileUrl, msg.id)
               }}
-              className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
+              className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors flex-shrink-0"
             >
               {playingVoiceId === msg.id ? (
-                <FaPause size={12} />
+                <FaPause size={10} />
               ) : (
-                <FaPlay size={12} />
+                <FaPlay size={10} />
               )}
             </button>
-            <div className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
+            <div className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden min-w-[40px]">
               <div 
                 className={`h-full bg-white/60 rounded-full transition-all duration-300 ${
                   playingVoiceId === msg.id ? 'w-full' : 'w-0'
                 }`}
               />
             </div>
-            <span className="text-xs opacity-75">
+            <span className="text-xs opacity-75 flex-shrink-0">
               {formatDuration(msg.fileDuration || 0)}
             </span>
           </div>
@@ -599,8 +579,8 @@ export default function ChatWidget() {
             rel="noopener noreferrer"
             className="flex items-center gap-2 underline hover:no-underline"
           >
-            <FiFile size={14} />
-            <span className="truncate max-w-[150px]">{msg.fileName || 'Download'}</span>
+            <FiFile size={14} className="flex-shrink-0" />
+            <span className="truncate max-w-[120px]">{msg.fileName || 'Download'}</span>
           </a>
         )
       
@@ -616,7 +596,7 @@ export default function ChatWidget() {
   const isDisabled = isSending || isUploading || isRecording
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <>
       {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
@@ -639,14 +619,14 @@ export default function ChatWidget() {
         }}
       />
 
-      {/* Chat Button */}
+      {/* Chat Button - Fixed position with safe area */}
       {!isOpen && (
         <button
           type="button"
           onClick={() => { setIsOpen(true); setUnreadCount(0) }}
-          className="w-14 h-14 bg-primary-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-800 transition-all hover:scale-105"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 bg-primary-900 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-800 transition-all hover:scale-105"
         >
-          <FaComments size={24} />
+          <FaComments size={20} className="sm:w-6 sm:h-6" />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center font-bold">
               {unreadCount > 9 ? '9+' : unreadCount}
@@ -655,52 +635,60 @@ export default function ChatWidget() {
         </button>
       )}
 
-      {/* Chat Window */}
+      {/* Chat Window - FIXED MOBILE LAYOUT */}
       {isOpen && (
-        <div className="w-80 sm:w-96 h-[500px] bg-white rounded-lg shadow-2xl flex flex-col overflow-hidden border">
+        <div className="fixed inset-0 sm:inset-auto sm:bottom-4 sm:right-4 md:bottom-6 md:right-6 z-50 
+                        sm:w-80 md:w-96 sm:h-[500px] sm:max-h-[80vh]
+                        bg-white sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden sm:border">
+          
           {/* Header */}
-          <div className="bg-primary-900 text-white p-4 flex justify-between items-center shrink-0">
-            <div>
-              <h3 className="font-semibold">Chat with us</h3>
-              <p className="text-xs text-primary-200">We reply within minutes</p>
+          <div className="bg-primary-900 text-white p-3 sm:p-4 flex justify-between items-center shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center">
+                <FaComments size={18} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm sm:text-base">Chat with us</h3>
+                <p className="text-xs text-primary-200">We reply within minutes</p>
+              </div>
             </div>
             <button 
               type="button"
               onClick={() => { setIsOpen(false); setUnreadCount(0) }}
-              className="p-1 hover:bg-white/10 rounded"
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
             >
-              <FaTimes />
+              <FaTimes size={18} />
             </button>
           </div>
 
           {/* Error banner */}
           {error && (
-            <div className="bg-red-100 text-red-700 px-4 py-2 text-sm flex justify-between items-center shrink-0">
-              <span>{error}</span>
+            <div className="bg-red-100 text-red-700 px-3 py-2 text-sm flex justify-between items-center shrink-0">
+              <span className="text-xs sm:text-sm">{error}</span>
               <button 
                 type="button"
                 onClick={() => setError(null)} 
-                className="text-red-500 hover:text-red-700"
+                className="text-red-500 hover:text-red-700 p-1"
               >
                 <FaTimes size={12} />
               </button>
             </div>
           )}
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          {/* Messages - Scrollable area */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 bg-gray-50">
             {messages.map((msg) => (
               <div
                 key={msg.id}
                 className={`flex ${msg.sender === 'visitor' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] p-3 rounded-lg ${
+                  className={`max-w-[85%] sm:max-w-[80%] p-2.5 sm:p-3 rounded-2xl ${
                     msg.sender === 'visitor'
-                      ? `bg-primary-900 text-white ${msg.pending ? 'opacity-50' : ''} ${msg.failed ? 'bg-red-500' : ''}`
+                      ? `bg-primary-900 text-white ${msg.pending ? 'opacity-60' : ''} ${msg.failed ? 'bg-red-500' : ''}`
                       : msg.sender === 'admin'
                       ? 'bg-green-100 text-gray-800 border border-green-200'
-                      : 'bg-white text-gray-800 border border-gray-200'
+                      : 'bg-white text-gray-800 border border-gray-200 shadow-sm'
                   }`}
                 >
                   {msg.sender === 'admin' && (
@@ -710,7 +698,7 @@ export default function ChatWidget() {
                   {renderMessageContent(msg)}
                   
                   <div className="flex items-center justify-end gap-2 mt-1">
-                    <span className={`text-xs ${
+                    <span className={`text-[10px] sm:text-xs ${
                       msg.sender === 'visitor' ? 'text-primary-200' : 'text-gray-400'
                     }`}>
                       {new Date(msg.createdAt).toLocaleTimeString([], { 
@@ -718,8 +706,8 @@ export default function ChatWidget() {
                         minute: '2-digit' 
                       })}
                     </span>
-                    {msg.pending && <span className="text-xs">•••</span>}
-                    {msg.failed && <span className="text-xs text-red-200">Failed</span>}
+                    {msg.pending && <span className="text-[10px]">•••</span>}
+                    {msg.failed && <span className="text-[10px] text-red-200">Failed</span>}
                   </div>
                 </div>
               </div>
@@ -733,16 +721,16 @@ export default function ChatWidget() {
               <button
                 type="button"
                 onClick={openWhatsApp}
-                className="w-full bg-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-green-600"
+                className="w-full bg-green-500 text-white py-2.5 rounded-xl flex items-center justify-center gap-2 hover:bg-green-600 text-sm font-medium"
               >
-                <FaWhatsapp /> Continue on WhatsApp
+                <FaWhatsapp size={18} /> Continue on WhatsApp
               </button>
               
               {!showInfoForm ? (
                 <button
                   type="button"
                   onClick={() => setShowInfoForm(true)}
-                  className="w-full text-primary-600 text-sm hover:underline"
+                  className="w-full text-primary-600 text-sm hover:underline py-1"
                 >
                   Or request a callback
                 </button>
@@ -751,14 +739,14 @@ export default function ChatWidget() {
                   <input
                     type="text"
                     placeholder="Your name"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    className="w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                     value={visitorInfo.name}
                     onChange={(e) => setVisitorInfo(v => ({ ...v, name: e.target.value }))}
                   />
                   <input
                     type="tel"
                     placeholder="Phone number"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    className="w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                     value={visitorInfo.phone}
                     onChange={(e) => setVisitorInfo(v => ({ ...v, phone: e.target.value }))}
                   />
@@ -766,7 +754,7 @@ export default function ChatWidget() {
                     type="button"
                     onClick={submitContactInfo}
                     disabled={!visitorInfo.name || !visitorInfo.phone}
-                    className="w-full bg-primary-900 text-white py-2 rounded-lg text-sm disabled:opacity-50"
+                    className="w-full bg-primary-900 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
                   >
                     Request Callback
                   </button>
@@ -775,15 +763,15 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {/* Input Area */}
+          {/* Input Area - FIXED FOR MOBILE */}
           {!showWhatsApp && (
-            <div className="p-3 border-t bg-white shrink-0">
+            <div className="p-2 sm:p-3 border-t bg-white shrink-0 safe-area-bottom">
               {/* Recording indicator */}
               {isRecording && (
-                <div className="flex items-center justify-between mb-2 p-2 bg-red-50 rounded-lg">
+                <div className="flex items-center justify-between mb-2 p-2 bg-red-50 rounded-xl">
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-sm text-red-600">
+                    <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-xs sm:text-sm text-red-600 font-medium">
                       Recording {formatDuration(recordingTime)}
                     </span>
                   </div>
@@ -792,79 +780,83 @@ export default function ChatWidget() {
                     onClick={stopRecording} 
                     className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
                   >
-                    <FaStop size={12} />
+                    <FaStop size={10} />
                   </button>
                 </div>
               )}
 
               {/* Uploading indicator */}
               {isUploading && (
-                <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 rounded-xl">
                   <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm text-blue-600">Uploading...</span>
+                  <span className="text-xs sm:text-sm text-blue-600">Uploading...</span>
                 </div>
               )}
 
-              <div className="flex items-center gap-2">
-                {/* Image button */}
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={isDisabled}
-                  className="p-2 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Send image"
-                >
-                  <FaImage size={16} />
-                </button>
-                
-                {/* File button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isDisabled}
-                  className="p-2 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Send file"
-                >
-                  <FaPaperclip size={16} />
-                </button>
-                
-                {/* Voice button */}
-                <button
-                  type="button"
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={isUploading || isSending}
-                  className={`p-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed ${
-                    isRecording 
-                      ? 'text-red-500 bg-red-50 hover:bg-red-100' 
-                      : 'text-gray-400 hover:text-primary-600 hover:bg-gray-100'
-                  }`}
-                  title={isRecording ? 'Stop recording' : 'Record voice'}
-                >
-                  <FaMicrophone size={16} />
-                </button>
+              {/* Input row - FIXED LAYOUT */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Action buttons - Hidden on very small screens when not needed */}
+                <div className="flex items-center gap-0.5 sm:gap-1">
+                  {/* Image button */}
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={isDisabled}
+                    className="p-2 sm:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    title="Send image"
+                  >
+                    <FaImage size={16} />
+                  </button>
+                  
+                  {/* File button - Hidden on smallest screens */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isDisabled}
+                    className="hidden xs:flex p-2 sm:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    title="Send file"
+                  >
+                    <FaPaperclip size={16} />
+                  </button>
+                  
+                  {/* Voice button */}
+                  <button
+                    type="button"
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isUploading || isSending}
+                    className={`p-2 sm:p-2.5 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                      isRecording 
+                        ? 'text-red-500 bg-red-50 hover:bg-red-100' 
+                        : 'text-gray-400 hover:text-primary-600 hover:bg-gray-100'
+                    }`}
+                    title={isRecording ? 'Stop recording' : 'Record voice'}
+                  >
+                    <FaMicrophone size={16} />
+                  </button>
+                </div>
 
-                {/* Text input */}
+                {/* Text input - Flexible width */}
                 <input
                   type="text"
                   placeholder="Type a message..."
-                  className="flex-1 px-4 py-2 border rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
+                  className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
                   disabled={isDisabled}
                 />
 
-                {/* Send button */}
+                {/* Send button - Fixed size */}
                 <button
                   type="button"
                   onClick={() => sendMessage()}
                   disabled={!inputMessage.trim() || isDisabled}
-                  className="w-10 h-10 bg-primary-900 text-white rounded-full flex items-center justify-center hover:bg-primary-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-9 h-9 sm:w-10 sm:h-10 bg-primary-900 text-white rounded-full flex items-center justify-center hover:bg-primary-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
                 >
                   {isSending ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <FaPaperPlane size={14} />
+                    <FaPaperPlane size={12} className="sm:w-3.5 sm:h-3.5" />
                   )}
                 </button>
               </div>
@@ -872,6 +864,6 @@ export default function ChatWidget() {
           )}
         </div>
       )}
-    </div>
+    </>
   )
 }
