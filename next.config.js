@@ -1,4 +1,4 @@
-// next.config.js - FINAL WORKING VERSION
+// next.config.js
 const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
@@ -11,7 +11,6 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  productionBrowserSourceMaps: false,
   
   experimental: {
     missingSuspenseWithCSRBailout: false,
@@ -19,24 +18,8 @@ const nextConfig = {
   
   images: {
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
+      { protocol: 'https', hostname: '**' },
     ],
-  },
-  
-  // NO CSP HEADERS - Let Vercel handle security
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-        ],
-      },
-    ]
   },
 }
 
