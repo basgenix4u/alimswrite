@@ -764,105 +764,102 @@ export default function ChatWidget() {
           )}
 
           {/* Input Area - FIXED FOR MOBILE */}
-          {!showWhatsApp && (
-            <div className="p-2 sm:p-3 border-t bg-white shrink-0 safe-area-bottom">
-              {/* Recording indicator */}
-              {isRecording && (
-                <div className="flex items-center justify-between mb-2 p-2 bg-red-50 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-xs sm:text-sm text-red-600 font-medium">
-                      Recording {formatDuration(recordingTime)}
-                    </span>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={stopRecording} 
-                    className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
-                  >
-                    <FaStop size={10} />
-                  </button>
-                </div>
-              )}
-
-              {/* Uploading indicator */}
-              {isUploading && (
-                <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 rounded-xl">
-                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs sm:text-sm text-blue-600">Uploading...</span>
-                </div>
-              )}
-
-              {/* Input row - FIXED LAYOUT */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                {/* Action buttons - Hidden on very small screens when not needed */}
-                <div className="flex items-center gap-0.5 sm:gap-1">
-                  {/* Image button */}
-                  <button
-                    type="button"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={isDisabled}
-                    className="p-2 sm:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title="Send image"
-                  >
-                    <FaImage size={16} />
-                  </button>
-                  
-                  {/* File button - Hidden on smallest screens */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isDisabled}
-                    className="hidden xs:flex p-2 sm:p-2.5 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title="Send file"
-                  >
-                    <FaPaperclip size={16} />
-                  </button>
-                  
-                  {/* Voice button */}
-                  <button
-                    type="button"
-                    onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isUploading || isSending}
-                    className={`p-2 sm:p-2.5 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                      isRecording 
-                        ? 'text-red-500 bg-red-50 hover:bg-red-100' 
-                        : 'text-gray-400 hover:text-primary-600 hover:bg-gray-100'
-                    }`}
-                    title={isRecording ? 'Stop recording' : 'Record voice'}
-                  >
-                    <FaMicrophone size={16} />
-                  </button>
-                </div>
-
-                {/* Text input - Flexible width */}
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  disabled={isDisabled}
-                />
-
-                {/* Send button - Fixed size */}
-                <button
-                  type="button"
-                  onClick={() => sendMessage()}
-                  disabled={!inputMessage.trim() || isDisabled}
-                  className="w-9 h-9 sm:w-10 sm:h-10 bg-primary-900 text-white rounded-full flex items-center justify-center hover:bg-primary-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-                >
-                  {isSending ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <FaPaperPlane size={12} className="sm:w-3.5 sm:h-3.5" />
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
+{!showWhatsApp && (
+  <div className="p-2 sm:p-3 border-t bg-white shrink-0">
+    {/* Recording indicator */}
+    {isRecording && (
+      <div className="flex items-center justify-between mb-2 p-2 bg-red-50 rounded-xl">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+          <span className="text-xs sm:text-sm text-red-600 font-medium">
+            Recording {formatDuration(recordingTime)}
+          </span>
         </div>
+        <button 
+          type="button"
+          onClick={stopRecording} 
+          className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
+        >
+          <FaStop size={10} />
+        </button>
+      </div>
+    )}
+
+    {/* Uploading indicator */}
+    {isUploading && (
+      <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 rounded-xl">
+        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs sm:text-sm text-blue-600">Uploading...</span>
+      </div>
+    )}
+
+    {/* Input row - ALL BUTTONS VISIBLE */}
+    <div className="flex items-center gap-1">
+      {/* Image button */}
+      <button
+        type="button"
+        onClick={() => imageInputRef.current?.click()}
+        disabled={isDisabled}
+        className="p-1.5 sm:p-2 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+        title="Send image"
+      >
+        <FaImage size={14} className="sm:w-4 sm:h-4" />
+      </button>
+      
+      {/* File button - NOW VISIBLE ON ALL SCREENS */}
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={isDisabled}
+        className="p-1.5 sm:p-2 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+        title="Send file"
+      >
+        <FaPaperclip size={14} className="sm:w-4 sm:h-4" />
+      </button>
+      
+      {/* Voice button */}
+      <button
+        type="button"
+        onClick={isRecording ? stopRecording : startRecording}
+        disabled={isUploading || isSending}
+        className={`p-1.5 sm:p-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0 ${
+          isRecording 
+            ? 'text-red-500 bg-red-50 hover:bg-red-100' 
+            : 'text-gray-400 hover:text-primary-600 hover:bg-gray-100'
+        }`}
+        title={isRecording ? 'Stop recording' : 'Record voice'}
+      >
+        <FaMicrophone size={14} className="sm:w-4 sm:h-4" />
+      </button>
+
+      {/* Text input - Flexible width */}
+      <input
+        type="text"
+        placeholder="Message..."
+        className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100"
+        value={inputMessage}
+        onChange={(e) => setInputMessage(e.target.value)}
+        onKeyPress={handleKeyPress}
+        disabled={isDisabled}
+      />
+
+      {/* Send button - Fixed size */}
+      <button
+        type="button"
+        onClick={() => sendMessage()}
+        disabled={!inputMessage.trim() || isDisabled}
+        className="w-8 h-8 sm:w-10 sm:h-10 bg-primary-900 text-white rounded-full flex items-center justify-center hover:bg-primary-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+      >
+        {isSending ? (
+          <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <FaPaperPlane size={12} className="sm:w-3.5 sm:h-3.5" />
+        )}
+      </button>
+    </div>
+  </div>
+)}
+       </div>
       )}
     </>
   )
