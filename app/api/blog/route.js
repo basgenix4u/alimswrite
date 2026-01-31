@@ -4,6 +4,18 @@ import { prisma } from '@/lib/db'
 import slugify from 'slugify'
 import { sanitizeHtml, sanitizeText } from '@/lib/sanitize'
 
+// Handle OPTIONS request (for CORS preflight)
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Allow': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  })
+}
+
 // GET blog posts
 export async function GET(request) {
   try {
@@ -15,31 +27,18 @@ export async function GET(request) {
     const featured = searchParams.get('featured')
 
     const skip = (page - 1) * limit
-
     const where = {}
 
-    if (status) {
-      where.status = status
-    }
-
-    if (categoryId) {
-      where.categoryId = categoryId
-    }
-
-    if (featured === 'true') {
-      where.isFeatured = true
-    }
+    if (status) where.status = status
+    if (categoryId) where.categoryId = categoryId
+    if (featured === 'true') where.isFeatured = true
 
     const [posts, total] = await Promise.all([
       prisma.blogPost.findMany({
         where,
         include: {
           category: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
+            select: { id: true, name: true, slug: true },
           },
         },
         orderBy: [
@@ -63,7 +62,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Get blog posts error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch blog posts', details: error.message, posts: [], total: 0 },
+      { error: 'Failed to fetch blog posts', posts: [], total: 0 },
       { status: 500 }
     )
   }
@@ -71,78 +70,30 @@ export async function GET(request) {
 
 // POST - Create blog post
 export async function POST(request) {
-  console.log('📝 Blog POST request received')
-  
   try {
     const body = await request.json()
-    console.log('📝 Blog data:', Object.keys(body))
 
-    const {
-      title,
-      excerpt,
-      content,
-      categoryId,
-      tags,
-      keywords,
-      featuredImage,
-      metaTitle,
-      metaDescription,
-      status,
-      isFeatured,
-      allowComments,
-    } = body
+    const { title, excerpt, content, categoryId, tags, keywords, featuredImage, metaTitle, metaDescription, status, isFeatured, allowComments } = body
 
-    // Validate required fields
-    if (!title?.trim()) {
+    if (!title?.trim() || !excerpt?.trim() || !content?.trim() || !categoryId) {
       return NextResponse.json(
-        { error: 'Title is required' },
+        { error: 'Title, excerpt, content, and category are required' },
         { status: 400 }
       )
     }
 
-    if (!excerpt?.trim()) {
-      return NextResponse.json(
-        { error: 'Excerpt is required' },
-        { status: 400 }
-      )
-    }
-
-    if (!content?.trim()) {
-      return NextResponse.json(
-        { error: 'Content is required' },
-        { status: 400 }
-      )
-    }
-
-    if (!categoryId) {
-      return NextResponse.json(
-        { error: 'Category is required' },
-        { status: 400 }
-      )
-    }
-
-    // Check if category exists
-    const category = await prisma.blogCategory.findUnique({
-      where: { id: categoryId }
-    })
-
+    const category = await prisma.blogCategory.findUnique({ where: { id: categoryId } })
     if (!category) {
-      return NextResponse.json(
-        { error: 'Category not found' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Category not found' }, { status: 400 })
     }
 
-    // Sanitize inputs
     const cleanTitle = sanitizeText(title)
     const cleanExcerpt = sanitizeText(excerpt)
     const cleanContent = sanitizeHtml(content)
 
-    // Generate unique slug
     let baseSlug = slugify(cleanTitle, { lower: true, strict: true })
     let slug = baseSlug
     let counter = 1
-
     while (await prisma.blogPost.findUnique({ where: { slug } })) {
       slug = `${baseSlug}-${counter}`
       counter++
@@ -155,8 +106,8 @@ export async function POST(request) {
         excerpt: cleanExcerpt,
         content: cleanContent,
         categoryId,
-        tags: Array.isArray(tags) ? tags.filter(t => t).map(t => sanitizeText(t)) : [],
-        keywords: Array.isArray(keywords) ? keywords.filter(k => k).map(k => sanitizeText(k)) : [],
+        tags: Array.isArray(tags) ? tags.filter(Boolean).map(t => sanitizeText(t)) : [],
+        keywords: Array.isArray(keywords) ? keywords.filter(Boolean).map(k => sanitizeText(k)) : [],
         featuredImage: featuredImage || null,
         metaTitle: metaTitle ? sanitizeText(metaTitle) : cleanTitle,
         metaDescription: metaDescription ? sanitizeText(metaDescription) : cleanExcerpt.substring(0, 160),
@@ -165,20 +116,12 @@ export async function POST(request) {
         allowComments: allowComments !== false,
         publishedAt: status === 'published' ? new Date() : null,
       },
-      include: {
-        category: true,
-      },
+      include: { category: true },
     })
 
-    console.log('✅ Blog post created:', post.id)
-
-    return NextResponse.json({
-      success: true,
-      message: 'Blog post created successfully',
-      post,
-    })
+    return NextResponse.json({ success: true, message: 'Blog post created', post })
   } catch (error) {
-    console.error('❌ Create blog post error:', error)
+    console.error('Create blog post error:', error)
     return NextResponse.json(
       { error: 'Failed to create blog post', details: error.message },
       { status: 500 }
