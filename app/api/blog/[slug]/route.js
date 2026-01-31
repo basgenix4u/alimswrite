@@ -3,35 +3,52 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import slugify from 'slugify'
 
-// Simple sanitize functions (inline to avoid import issues)
+// ============================================
+// SANITIZE FUNCTIONS (No external dependencies)
+// ============================================
+
+const DANGEROUS_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select', 'noscript']
+
 function cleanHtml(dirty) {
-  if (!dirty) return ''
-  try {
-    // Dynamic import for server-side only
-    const DOMPurify = require('isomorphic-dompurify')
-    return DOMPurify.sanitize(dirty, {
-      ALLOWED_TAGS: [
-        'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
-        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-        'ul', 'ol', 'li', 'blockquote', 'code', 'pre',
-        'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-        'div', 'span',
-      ],
-      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'target', 'rel'],
-    })
-  } catch (e) {
-    // Fallback if DOMPurify fails
-    return dirty.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-  }
+  if (!dirty || typeof dirty !== 'string') return ''
+  
+  let clean = dirty
+  
+  // Remove dangerous tags and their content
+  DANGEROUS_TAGS.forEach(tag => {
+    // Remove opening and closing tags with content
+    const regex = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi')
+    clean = clean.replace(regex, '')
+    // Remove self-closing tags
+    clean = clean.replace(new RegExp(`<${tag}[^>]*\\/?>`, 'gi'), '')
+  })
+  
+  // Remove event handlers (onclick, onload, onerror, etc.)
+  clean = clean.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')
+  clean = clean.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '')
+  
+  // Remove javascript: URLs
+  clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"')
+  clean = clean.replace(/src\s*=\s*["']javascript:[^"']*["']/gi, 'src=""')
+  
+  // Remove data: URLs (can be used for XSS)
+  clean = clean.replace(/src\s*=\s*["']data:[^"']*["']/gi, 'src=""')
+  
+  return clean.trim()
 }
 
 function cleanText(input) {
   if (!input || typeof input !== 'string') return ''
   return input
     .trim()
-    .replace(/<[^>]*>/g, '')
+    .replace(/<[^>]*>/g, '') // Remove all HTML tags
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
     .substring(0, 10000)
 }
+
+// ============================================
+// API HANDLERS
+// ============================================
 
 // Handle OPTIONS request
 export async function OPTIONS() {
@@ -165,12 +182,12 @@ export async function POST(request) {
     }
 
     // Clean inputs
-    const cleanTitle = cleanText(title)
-    const cleanExcerpt = cleanText(excerpt)
-    const cleanContent = cleanHtml(content)
+    const sanitizedTitle = cleanText(title)
+    const sanitizedExcerpt = cleanText(excerpt)
+    const sanitizedContent = cleanHtml(content)
 
     // Generate unique slug
-    let baseSlug = slugify(cleanTitle, { lower: true, strict: true })
+    let baseSlug = slugify(sanitizedTitle, { lower: true, strict: true })
     let slug = baseSlug
     let counter = 1
     
@@ -182,27 +199,27 @@ export async function POST(request) {
     }
 
     // Process arrays
-    const cleanTags = Array.isArray(tags) 
-      ? tags.filter(t => t && typeof t === 'string').map(t => t.trim())
+    const processedTags = Array.isArray(tags) 
+      ? tags.filter(t => t && typeof t === 'string').map(t => t.trim()).filter(Boolean)
       : []
     
-    const cleanKeywords = Array.isArray(keywords)
-      ? keywords.filter(k => k && typeof k === 'string').map(k => k.trim())
+    const processedKeywords = Array.isArray(keywords)
+      ? keywords.filter(k => k && typeof k === 'string').map(k => k.trim()).filter(Boolean)
       : []
 
     // Create the post
     const post = await prisma.blogPost.create({
       data: {
-        title: cleanTitle,
+        title: sanitizedTitle,
         slug,
-        excerpt: cleanExcerpt,
-        content: cleanContent,
+        excerpt: sanitizedExcerpt,
+        content: sanitizedContent,
         categoryId,
-        tags: cleanTags,
-        keywords: cleanKeywords,
+        tags: processedTags,
+        keywords: processedKeywords,
         featuredImage: featuredImage || null,
-        metaTitle: metaTitle ? cleanText(metaTitle) : cleanTitle,
-        metaDescription: metaDescription ? cleanText(metaDescription) : cleanExcerpt.substring(0, 160),
+        metaTitle: metaTitle ? cleanText(metaTitle) : sanitizedTitle,
+        metaDescription: metaDescription ? cleanText(metaDescription) : sanitizedExcerpt.substring(0, 160),
         status: status || 'draft',
         isFeatured: Boolean(isFeatured),
         allowComments: allowComments !== false,
