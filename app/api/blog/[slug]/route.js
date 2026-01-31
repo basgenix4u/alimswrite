@@ -1,196 +1,238 @@
-// app/api/blog/[slug]/route.js
-import { sanitizeHtml } from '@/lib/sanitize'
+// app/api/blog/route.js
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import slugify from 'slugify'
 
+// Simple sanitize functions (inline to avoid import issues)
+function cleanHtml(dirty) {
+  if (!dirty) return ''
+  try {
+    // Dynamic import for server-side only
+    const DOMPurify = require('isomorphic-dompurify')
+    return DOMPurify.sanitize(dirty, {
+      ALLOWED_TAGS: [
+        'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'blockquote', 'code', 'pre',
+        'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'div', 'span',
+      ],
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'target', 'rel'],
+    })
+  } catch (e) {
+    // Fallback if DOMPurify fails
+    return dirty.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+  }
+}
 
+function cleanText(input) {
+  if (!input || typeof input !== 'string') return ''
+  return input
+    .trim()
+    .replace(/<[^>]*>/g, '')
+    .substring(0, 10000)
+}
+
+// Handle OPTIONS request
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Allow': 'GET, PATCH, DELETE, OPTIONS',
-      'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
+      'Allow': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   })
 }
 
-// Get single blog post
-export async function GET(request, { params }) {
+// GET blog posts
+export async function GET(request) {
   try {
-    const post = await prisma.blogPost.findUnique({
-      where: { slug: params.slug },
-      include: {
-        category: true,
-        comments: {
-          where: { status: 'approved', parentId: null },
-          orderBy: { createdAt: 'desc' },
-          include: {
-            replies: {
-              where: { status: 'approved' },
-              orderBy: { createdAt: 'asc' },
-            },
+    const { searchParams } = new URL(request.url)
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20')))
+    const status = searchParams.get('status')
+    const categoryId = searchParams.get('categoryId')
+    const featured = searchParams.get('featured')
+
+    const skip = (page - 1) * limit
+    
+    // Build where clause
+    const where = {}
+    if (status) where.status = status
+    if (categoryId) where.categoryId = categoryId
+    if (featured === 'true') where.isFeatured = true
+
+    // Execute queries
+    const [posts, total] = await Promise.all([
+      prisma.blogPost.findMany({
+        where,
+        include: {
+          category: {
+            select: { id: true, name: true, slug: true },
           },
         },
-      },
-    })
+        orderBy: [
+          { isFeatured: 'desc' },
+          { publishedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        skip,
+        take: limit,
+      }),
+      prisma.blogPost.count({ where }),
+    ])
 
-    if (!post) {
-      return NextResponse.json(
-        { error: 'Post not found' },
-        { status: 404 }
-      )
-    }
-
-    // Increment views
-    await prisma.blogPost.update({
-      where: { id: post.id },
-      data: { views: { increment: 1 } },
-    })
-
-    // Get related posts
-    const relatedPosts = await prisma.blogPost.findMany({
-      where: {
-        categoryId: post.categoryId,
-        id: { not: post.id },
-        status: 'published',
-      },
-      take: 3,
-      orderBy: { publishedAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        excerpt: true,
-        featuredImage: true,
-        publishedAt: true,
-      },
-    })
+    const totalPages = Math.ceil(total / limit)
 
     return NextResponse.json({
-      post,
-      relatedPosts,
-    })
-  } catch (error) {
-    console.error('Get blog post error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch blog post' },
-      { status: 500 }
-    )
-  }
-}
-
-// Update blog post
-export async function PATCH(request, { params }) {
-  try {
-    const body = await request.json()
-
-    const existingPost = await prisma.blogPost.findUnique({
-      where: { slug: params.slug },
-    })
-
-    if (!existingPost) {
-      return NextResponse.json(
-        { error: 'Post not found' },
-        { status: 404 }
-      )
-    }
-
-    // Handle slug update if title changed
-    let updateData = { ...body }
-    
-    if (body.title && body.title !== existingPost.title) {
-      let newSlug = slugify(body.title, { lower: true, strict: true })
-      
-      // Check if slug exists
-      const slugExists = await prisma.blogPost.findFirst({
-        where: {
-          slug: newSlug,
-          id: { not: existingPost.id },
-        },
-      })
-      
-      if (slugExists) {
-        newSlug = `${newSlug}-${Date.now()}`
+      posts,
+      total,
+      page,
+      limit,
+      totalPages,
+      pagination: {
+        page,
+        pages: totalPages,
+        total,
       }
-      
-      updateData.slug = newSlug
-    }
-
-    // Handle publishing
-    if (body.status === 'published' && !existingPost.publishedAt) {
-      updateData.publishedAt = new Date()
-    }
-
-    const post = await prisma.blogPost.update({
-      where: { id: existingPost.id },
-      data: updateData,
-      include: {
-        category: true,
-      },
     })
 
-    return NextResponse.json({
-      success: true,
-      post,
-    })
   } catch (error) {
-    console.error('Update blog post error:', error)
+    console.error('GET /api/blog error:', error)
     return NextResponse.json(
-      { error: 'Failed to update blog post' },
+      { 
+        error: 'Failed to fetch blog posts',
+        message: error.message,
+        posts: [],
+        total: 0,
+        pagination: { page: 1, pages: 1, total: 0 }
+      },
       { status: 500 }
     )
   }
 }
 
-// Delete blog post
-export async function DELETE(request, { params }) {
+// POST - Create blog post
+export async function POST(request) {
   try {
-    // Find the post first
-    const post = await prisma.blogPost.findUnique({
-      where: { slug: params.slug },
-      include: {
-        comments: true,
-      },
-    })
-
-    if (!post) {
+    let body
+    try {
+      body = await request.json()
+    } catch (e) {
       return NextResponse.json(
-        { error: 'Post not found or already deleted' },
-        { status: 404 }
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
       )
     }
 
-    // Delete all comments first (including replies)
-    if (post.comments && post.comments.length > 0) {
-      // Delete replies first
-      await prisma.comment.deleteMany({
-        where: {
-          postId: post.id,
-          parentId: { not: null },
-        },
-      })
-      
-      // Then delete parent comments
-      await prisma.comment.deleteMany({
-        where: { postId: post.id },
-      })
+    const {
+      title,
+      excerpt,
+      content,
+      categoryId,
+      tags,
+      keywords,
+      featuredImage,
+      metaTitle,
+      metaDescription,
+      status,
+      isFeatured,
+      allowComments
+    } = body
+
+    // Validation
+    if (!title?.trim()) {
+      return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+    }
+    if (!excerpt?.trim()) {
+      return NextResponse.json({ error: 'Excerpt is required' }, { status: 400 })
+    }
+    if (!content?.trim()) {
+      return NextResponse.json({ error: 'Content is required' }, { status: 400 })
+    }
+    if (!categoryId) {
+      return NextResponse.json({ error: 'Category is required' }, { status: 400 })
     }
 
-    // Now delete the post
-    await prisma.blogPost.delete({
-      where: { id: post.id },
+    // Verify category exists
+    const category = await prisma.blogCategory.findUnique({
+      where: { id: categoryId }
+    })
+    
+    if (!category) {
+      return NextResponse.json({ error: 'Category not found' }, { status: 400 })
+    }
+
+    // Clean inputs
+    const cleanTitle = cleanText(title)
+    const cleanExcerpt = cleanText(excerpt)
+    const cleanContent = cleanHtml(content)
+
+    // Generate unique slug
+    let baseSlug = slugify(cleanTitle, { lower: true, strict: true })
+    let slug = baseSlug
+    let counter = 1
+    
+    let existingPost = await prisma.blogPost.findUnique({ where: { slug } })
+    while (existingPost) {
+      slug = `${baseSlug}-${counter}`
+      counter++
+      existingPost = await prisma.blogPost.findUnique({ where: { slug } })
+    }
+
+    // Process arrays
+    const cleanTags = Array.isArray(tags) 
+      ? tags.filter(t => t && typeof t === 'string').map(t => t.trim())
+      : []
+    
+    const cleanKeywords = Array.isArray(keywords)
+      ? keywords.filter(k => k && typeof k === 'string').map(k => k.trim())
+      : []
+
+    // Create the post
+    const post = await prisma.blogPost.create({
+      data: {
+        title: cleanTitle,
+        slug,
+        excerpt: cleanExcerpt,
+        content: cleanContent,
+        categoryId,
+        tags: cleanTags,
+        keywords: cleanKeywords,
+        featuredImage: featuredImage || null,
+        metaTitle: metaTitle ? cleanText(metaTitle) : cleanTitle,
+        metaDescription: metaDescription ? cleanText(metaDescription) : cleanExcerpt.substring(0, 160),
+        status: status || 'draft',
+        isFeatured: Boolean(isFeatured),
+        allowComments: allowComments !== false,
+        publishedAt: status === 'published' ? new Date() : null,
+      },
+      include: { category: true },
     })
 
     return NextResponse.json({
       success: true,
-      message: 'Blog post deleted successfully',
-    })
+      message: 'Blog post created successfully',
+      post
+    }, { status: 201 })
+
   } catch (error) {
-    console.error('Delete blog post error:', error)
+    console.error('POST /api/blog error:', error)
+    
+    // Handle Prisma specific errors
+    if (error.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'A post with this slug already exists' },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to delete blog post: ' + error.message },
+      { 
+        error: 'Failed to create blog post',
+        message: error.message 
+      },
       { status: 500 }
     )
   }
