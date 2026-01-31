@@ -4,6 +4,18 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import slugify from 'slugify'
 
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Allow': 'GET, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  })
+}
+
 // Get single blog post
 export async function GET(request, { params }) {
   try {

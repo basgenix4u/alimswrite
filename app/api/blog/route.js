@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import slugify from 'slugify'
 import { sanitizeHtml, sanitizeText } from '@/lib/sanitize'
 
-// Handle OPTIONS request (for CORS preflight)
+// Handle OPTIONS request
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
@@ -19,6 +19,9 @@ export async function OPTIONS() {
 // GET blog posts
 export async function GET(request) {
   try {
+    // Log for debugging (check Vercel logs)
+    console.log('API /api/blog GET called')
+    
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20')))
@@ -32,6 +35,8 @@ export async function GET(request) {
     if (status) where.status = status
     if (categoryId) where.categoryId = categoryId
     if (featured === 'true') where.isFeatured = true
+
+    console.log('Query params:', { page, limit, status, categoryId, featured })
 
     const [posts, total] = await Promise.all([
       prisma.blogPost.findMany({
@@ -52,53 +57,123 @@ export async function GET(request) {
       prisma.blogPost.count({ where }),
     ])
 
+    console.log(`Found ${posts.length} posts, total: ${total}`)
+
     return NextResponse.json({
       posts,
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+      // Add pagination object for admin page compatibility
+      pagination: {
+        page,
+        pages: Math.ceil(total / limit),
+        total,
+      }
     })
   } catch (error) {
     console.error('Get blog posts error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch blog posts', posts: [], total: 0 },
-      { status: 500 }
-    )
+    
+    // Return detailed error in development
+    const errorResponse = {
+      error: 'Failed to fetch blog posts',
+      posts: [],
+      total: 0,
+      pagination: { page: 1, pages: 1, total: 0 },
+    }
+    
+    if (process.env.NODE_ENV === 'development') {
+      errorResponse.details = error.message
+      errorResponse.stack = error.stack
+    }
+    
+    return NextResponse.json(errorResponse, { status: 500 })
   }
 }
 
 // POST - Create blog post
 export async function POST(request) {
+  console.log('API /api/blog POST called')
+  
   try {
     const body = await request.json()
+    console.log('Received body:', JSON.stringify(body, null, 2))
 
-    const { title, excerpt, content, categoryId, tags, keywords, featuredImage, metaTitle, metaDescription, status, isFeatured, allowComments } = body
+    const {
+      title,
+      excerpt,
+      content,
+      categoryId,
+      tags,
+      keywords,
+      featuredImage,
+      metaTitle,
+      metaDescription,
+      status,
+      isFeatured,
+      allowComments
+    } = body
 
-    if (!title?.trim() || !excerpt?.trim() || !content?.trim() || !categoryId) {
+    // Validation
+    if (!title?.trim()) {
       return NextResponse.json(
-        { error: 'Title, excerpt, content, and category are required' },
+        { error: 'Title is required' },
+        { status: 400 }
+      )
+    }
+    
+    if (!excerpt?.trim()) {
+      return NextResponse.json(
+        { error: 'Excerpt is required' },
+        { status: 400 }
+      )
+    }
+    
+    if (!content?.trim()) {
+      return NextResponse.json(
+        { error: 'Content is required' },
+        { status: 400 }
+      )
+    }
+    
+    if (!categoryId) {
+      return NextResponse.json(
+        { error: 'Category is required' },
         { status: 400 }
       )
     }
 
-    const category = await prisma.blogCategory.findUnique({ where: { id: categoryId } })
+    // Verify category exists
+    const category = await prisma.blogCategory.findUnique({
+      where: { id: categoryId }
+    })
+    
     if (!category) {
-      return NextResponse.json({ error: 'Category not found' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Category not found' },
+        { status: 400 }
+      )
     }
 
+    // Sanitize inputs
     const cleanTitle = sanitizeText(title)
     const cleanExcerpt = sanitizeText(excerpt)
     const cleanContent = sanitizeHtml(content)
 
+    // Generate unique slug
     let baseSlug = slugify(cleanTitle, { lower: true, strict: true })
     let slug = baseSlug
     let counter = 1
+    
     while (await prisma.blogPost.findUnique({ where: { slug } })) {
       slug = `${baseSlug}-${counter}`
       counter++
     }
 
+    console.log('Creating post with slug:', slug)
+
+    // Create the post
     const post = await prisma.blogPost.create({
       data: {
         title: cleanTitle,
@@ -119,11 +194,37 @@ export async function POST(request) {
       include: { category: true },
     })
 
-    return NextResponse.json({ success: true, message: 'Blog post created', post })
+    console.log('Post created successfully:', post.id)
+
+    return NextResponse.json({
+      success: true,
+      message: 'Blog post created successfully',
+      post
+    }, { status: 201 })
+
   } catch (error) {
     console.error('Create blog post error:', error)
+    
+    // Check for specific Prisma errors
+    if (error.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'A post with this slug already exists' },
+        { status: 400 }
+      )
+    }
+    
+    if (error.code === 'P2003') {
+      return NextResponse.json(
+        { error: 'Invalid category reference' },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to create blog post', details: error.message },
+      {
+        error: 'Failed to create blog post',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      },
       { status: 500 }
     )
   }
