@@ -5,11 +5,6 @@ import { getToken } from 'next-auth/jwt'
 export async function middleware(request) {
   const { pathname } = request.nextUrl
 
-  // Skip API routes completely
-  if (pathname.startsWith('/api')) {
-    return NextResponse.next()
-  }
-
   // Check if it's an admin route (except login)
   if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
     const token = await getToken({
@@ -28,8 +23,5 @@ export async function middleware(request) {
 }
 
 export const config = {
-  matcher: [
-    // Match admin routes but NOT api routes
-    '/admin/:path*',
-  ],
+  matcher: ['/admin/:path*'],
 }
